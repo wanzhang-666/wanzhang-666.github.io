@@ -468,6 +468,14 @@ alias arm='ros2 service call /uav1/cmd/arming mavros_msgs/srv/CommandBool "{valu
 
 首次真机参数一定要保守：EGO 最大速度 0.3m/s、加速度 0.2m/s²，桥接限速限高同量级，目标点小于 1 米。确认能稳定悬停、轨迹平滑之后，再逐步放大到 0.5 / 0.8。
 
+### 真机实测：悬停与避障
+
+下面是板卡实机跑出来的悬停与避障录像（已去除音轨），可以直观看到目标点发布后起飞、稳定悬停与自主避障的全过程：
+
+<video src="/videos/rk3588-hover-and-avoidance.mp4" controls preload="metadata" width="100%" style="max-width: 960px; border-radius: 6px;">
+  你的浏览器不支持 HTML5 视频，<a href="/videos/rk3588-hover-and-avoidance.mp4">点此下载观看</a>。
+</video>
+
 ---
 
 ## 12. 踩坑速查表
