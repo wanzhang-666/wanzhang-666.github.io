@@ -13,7 +13,6 @@ categories:
   - 机器人实战
 ---
 
-
 > 本文基于 RK3588 板卡上的实际工程整理而成，所有配置、命令与参数均来自板端真实文件。
 
 ---
@@ -43,22 +42,19 @@ MID-360S ──> /livox/lidar + /livox/imu
          /cloud_registered ──> UDP 转发 ──> 地面站/图传显示
 ```
 
-
-
 ---
 
 ## 1. 环境与硬件清单
 
-| 项目 | 型号 / 版本 |
-| --- | --- |
-| 开发板 | RK3588（aarch64，4 核 Cortex-A76 + 4 核 Cortex-A55） |
-| 系统 | Ubuntu 22.04.5 LTS，内核 6.1.118 |
-| ROS | ROS2 Humble |
-| 激光雷达 | Livox MID-360S（非重复扫描，10Hz） |
-| 飞控 | PX4，通过 UDP 与板卡通信 |
-| 相机（可选） | RealSense D435i（仅 FAST-LIVO2 视觉方案需要） |
-| DDS | `rmw_cyclonedds_cpp`（**全链路统一，不可混用**） |
-
+| 项目     | 型号 / 版本                                         |
+| ------ | ----------------------------------------------- |
+| 开发板    | RK3588（aarch64，4 核 Cortex-A76 + 4 核 Cortex-A55） |
+| 系统     | Ubuntu 22.04.5 LTS，内核 6.1.118                   |
+| ROS    | ROS2 Humble                                     |
+| 激光雷达   | Livox MID-360S（非重复扫描，10Hz）                      |
+| 飞控     | PX4，通过 UDP 与板卡通信                                |
+| 相机（可选） | RealSense D435i（仅 FAST-LIVO2 视觉方案需要）            |
+| DDS    | `rmw_cyclonedds_cpp`（**全链路统一，不可混用**）            |
 
 ---
 
@@ -66,13 +62,13 @@ MID-360S ──> /livox/lidar + /livox/imu
 
 这套系统同时存在**四个网段**，物理上混在几个网口上，必须先画清楚再动手：
 
-| 用途 | 网段 / IP | 所在接口 | 说明 |
-| --- | --- | --- | --- |
-| 雷达数据（FAST-LIO2） | 主机 `192.168.1.5`，雷达配置 `192.168.1.174` | `eth_lidar` | 驱动 bind 配置里的 `host_ip` |
-| 雷达数据（FAST-LIVO2） | 主机 `192.168.1.50` | `eth_lidar` | 同一颗雷达，两套算法要求不同主机 IP |
-| 板卡保留地址 | `192.168.111.204` | `eth_lidar` | 切 IP 时保留，避免影响其他网段 |
-| 飞控通信 | 飞控 `10.41.10.2:14550` | 板卡网口 | MAVROS 通过 `udp://:14550@10.41.10.2:14550` 连接 |
-| 地面站/遥控链路 | 对端 `192.168.144.11` | `eth0` / `eth_usb` | 点云 UDP 8888，控制指令 UDP 9999 |
+| 用途               | 网段 / IP                               | 所在接口               | 说明                                           |
+| ---------------- | ------------------------------------- | ------------------ | -------------------------------------------- |
+| 雷达数据（FAST-LIO2）  | 主机 `192.168.1.5`，雷达配置 `192.168.1.174` | `eth_lidar`        | 驱动 bind 配置里的 `host_ip`                       |
+| 雷达数据（FAST-LIVO2） | 主机 `192.168.1.50`                     | `eth_lidar`        | 同一颗雷达，两套算法要求不同主机 IP                          |
+| 板卡保留地址           | `192.168.111.204`                     | `eth_lidar`        | 切 IP 时保留，避免影响其他网段                            |
+| 飞控通信             | 飞控 `10.41.10.2:14550`                 | 板卡网口               | MAVROS 通过 `udp://:14550@10.41.10.2:14550` 连接 |
+| 地面站/遥控链路         | 对端 `192.168.144.11`                   | `eth0` / `eth_usb` | 点云 UDP 8888，控制指令 UDP 9999                    |
 
 ### 2.1 两套算法抢同一个网口怎么办
 
@@ -111,14 +107,14 @@ FAST-LIVO2 的一键脚本更进一步，把「改 IP → 启动 → 退出时�
 
 不要把几十个功能塞进一个 workspace。板卡上最终形成了这些相对独立的工作区：
 
-| 工作区 | 作用 |
-| --- | --- |
-| `~/mid360_ws` | `livox_ros_driver2` 雷达驱动（FAST-LIO2 用） |
-| `~/mid360_fastlio_ws` | FAST_LIO_ROS2 建图定位 + 全部一键启动脚本 + 自定义 MAVROS/EGO launch |
-| `~/fastlivo2_isolated` | FAST-LIVO2（激光+视觉紧耦合）**完全隔离**的一套环境 |
-| `~/mavros_ws` | MAVROS |
-| `~/ros2_ws` | `ego-planner-swarm`、`ego_to_mavros`、`external_odom_to_mavros` |
-| `~/d435i_ws` | RealSense 相机驱动 |
+| 工作区                    | 作用                                                            |
+| ---------------------- | ------------------------------------------------------------- |
+| `~/mid360_ws`          | `livox_ros_driver2` 雷达驱动（FAST-LIO2 用）                         |
+| `~/mid360_fastlio_ws`  | FAST_LIO_ROS2 建图定位 + 全部一键启动脚本 + 自定义 MAVROS/EGO launch         |
+| `~/fastlivo2_isolated` | FAST-LIVO2（激光+视觉紧耦合）**完全隔离**的一套环境                             |
+| `~/mavros_ws`          | MAVROS                                                        |
+| `~/ros2_ws`            | `ego-planner-swarm`、`ego_to_mavros`、`external_odom_to_mavros` |
+| `~/d435i_ws`           | RealSense 相机驱动                                                |
 
 `fastlivo2_isolated` 的设计很关键：它有自己的 `setup_env.sh`（设定 `ROS_DOMAIN_ID=42`，只 source 自己的两个 install），启动脚本明确声明「与旧脚本完全独立」。
 
@@ -387,6 +383,7 @@ PX4 的 OFFBOARD 模式有个硬性要求：**必须持续收到设定点**（�
 
 启动参数（一键脚本里的保守值）：
 
+
 ```bash
 ros2 launch ego_to_mavros pos_cmd_bridge.launch.py \
   mavros_namespace:=uav1 \
@@ -419,14 +416,14 @@ def finite(*values):                  # NaN / Inf 检查，脏数据直接丢弃
 
 最终把所有节点收进 `start_all_mid360_ego.sh`，用 `screen` 管理。启动顺序是精心排过的：
 
-| 顺序 | 会话名 | 节点 | 为什么排在这 |
-| --- | --- | --- | --- |
-| 1 | `mid360_mavros` | MAVROS（自定义 launch） | **必须第一个**，插件加载要 1~2 分钟 |
-| 2 | `mid360_lidar` | livox_ros_driver2 | 数据源，先起来 |
-| 3 | `mid360_fastlio` | FAST-LIO2 | 依赖雷达数据 |
-| 4 | `mid360_bridge` | external_odom_to_mavros | 依赖 `/Odometry` |
-| 5 | `mid360_ego` | EGO-Planner + traj_server | 依赖 `/Odometry` + `/cloud_registered` |
-| 6 | `mid360_ego_bridge` | pos_cmd_bridge | 依赖 EGO 输出和 MAVROS |
+| 顺序 | 会话名                 | 节点                        | 为什么排在这                               |
+| -- | ------------------- | ------------------------- | ------------------------------------ |
+| 1  | `mid360_mavros`     | MAVROS（自定义 launch）        | **必须第一个**，插件加载要 1~2 分钟               |
+| 2  | `mid360_lidar`      | livox_ros_driver2         | 数据源，先起来                              |
+| 3  | `mid360_fastlio`    | FAST-LIO2                 | 依赖雷达数据                               |
+| 4  | `mid360_bridge`     | external_odom_to_mavros   | 依赖 `/Odometry`                       |
+| 5  | `mid360_ego`        | EGO-Planner + traj_server | 依赖 `/Odometry` + `/cloud_registered` |
+| 6  | `mid360_ego_bridge` | pos_cmd_bridge            | 依赖 EGO 输出和 MAVROS                    |
 
 脚本开头有几行"保命"设置，每一行背后都是一次事故：
 
@@ -480,26 +477,26 @@ alias arm='ros2 service call /uav1/cmd/arming mavros_msgs/srv/CommandBool "{valu
 
 下面是板卡实机跑出来的悬停与避障录像（已去除音轨），可以直观看到目标点发布后起飞、稳定悬停与自主避障的全过程：
 
-<video src="/videos/rk3588-hover-and-avoidance.mp4" controls preload="metadata" width="100%" style="max-width: 960px; border-radius: 6px;">
-  你的浏览器不支持 HTML5 视频，<a href="/videos/rk3588-hover-and-avoidance.mp4">点此下载观看</a>。
+<video src="/videos/rk3588-hover-and-avoidance.mp4" controls preload="metadata" width="100%" style="max-width: 960px; border-radius: 6px;">  
+  你的浏览器不支持 HTML5 视频，<a href="/videos/rk3588-hover-and-avoidance.mp4">点此下载观看</a>。  
 </video>
 
 ---
 
 ## 12. 踩坑速查表
 
-| 现象 | 根因 | 解决 |
-| --- | --- | --- |
-| MAVROS 启动即 exit -6 | launch 里写了 `name='mavros'`，注入 `--ros-args -r __node` 压同名 | 自定义 launch 只用 `namespace`，删掉 `name=` |
-| `/uav1/setpoint_raw/local` 订阅数 0 | 不在 MAVROS 默认插件 allowlist | launch 传 `plugin_allowlist` 含 `setpoint_raw` |
-| 所有节点集体 exit -6 | `CYCLONEDDS_URI` / `ROS_LOCALHOST_ONLY` 残留，指向已删文件 | 启动脚本开头 `unset` |
-| 节点互相发现不了 | 各终端 RMW 不一致 | 统一 `rmw_cyclonedds_cpp` |
-| 雷达话题无数据、不报错 | 网卡 IP 与配置 `host_ip` 不一致，驱动 bind 失败 | `switch_lidar_ip.sh` 对齐并保留其它网段 |
-| 建图一直飘 | IMU 未预热 / 外参时间偏移没标定 | 上电静置 10s；用 LI-Init 标定后填回 YAML |
-| EGO launch 提示找不到包 | 主 launch 不在 `ego_planner` 包内 | 用绝对路径 `ros2 launch <abs path>` |
-| 没有深度相机 EGO 报错 | grid_map 订阅 pose/depth | remap 到 `/unused_*` 空话题 |
-| 切 OFFBOARD 后立刻掉模式 | 设定点没持续发 | pos_cmd_bridge 以 30Hz 发心跳 |
-| 注释里的雷达 IP 与配置不符 | 脚本注释是旧值 | 以驱动加载的 JSON 为准 |
+| 现象                               | 根因                                                       | 解决                                           |
+| -------------------------------- | -------------------------------------------------------- | -------------------------------------------- |
+| MAVROS 启动即 exit -6               | launch 里写了 `name='mavros'`，注入 `--ros-args -r __node` 压同名 | 自定义 launch 只用 `namespace`，删掉 `name=`         |
+| `/uav1/setpoint_raw/local` 订阅数 0 | 不在 MAVROS 默认插件 allowlist                                 | launch 传 `plugin_allowlist` 含 `setpoint_raw` |
+| 所有节点集体 exit -6                   | `CYCLONEDDS_URI` / `ROS_LOCALHOST_ONLY` 残留，指向已删文件        | 启动脚本开头 `unset`                               |
+| 节点互相发现不了                         | 各终端 RMW 不一致                                              | 统一 `rmw_cyclonedds_cpp`                      |
+| 雷达话题无数据、不报错                      | 网卡 IP 与配置 `host_ip` 不一致，驱动 bind 失败                       | `switch_lidar_ip.sh` 对齐并保留其它网段               |
+| 建图一直飘                            | IMU 未预热 / 外参时间偏移没标定                                      | 上电静置 10s；用 LI-Init 标定后填回 YAML                |
+| EGO launch 提示找不到包                | 主 launch 不在 `ego_planner` 包内                             | 用绝对路径 `ros2 launch <abs path>`               |
+| 没有深度相机 EGO 报错                    | grid_map 订阅 pose/depth                                   | remap 到 `/unused_*` 空话题                      |
+| 切 OFFBOARD 后立刻掉模式                | 设定点没持续发                                                  | pos_cmd_bridge 以 30Hz 发心跳                    |
+| 注释里的雷达 IP 与配置不符                  | 脚本注释是旧值                                                  | 以驱动加载的 JSON 为准                               |
 
 ---
 
@@ -544,19 +541,3 @@ ODOM_TOPIC=/aft_mapped_to_init ./start_all_fastlivo2_screen.sh
 ```
 
 日志实时写入 `~/fastlivo_realtime.log`，排查用 `tail -f` 即可。
-
----
-
-## 15. 附录 C：配图清单（发布前补充）
-
-
-
-1. **系统总览图**：无人机 + 雷达 + RK3588 + 飞控的照片，标注各网口连线；
-2. **数据流架构图**：本文第 0 节的链路图，建议用 draw.io / Excalidraw 画成彩色框图；
-3. **网络拓扑表截图**：`ip addr`、`ip route get` 的实际输出；
-4. **雷达点云截图**：RViz 里 `/livox/lidar` 的原始点云；
-5. **建图效果截图**：`/cloud_registered` 彩色全局地图 + `/Odometry` 轨迹；
-6. **EGO 规划截图**：`/drone_0_planning/bspline` 轨迹 + 占据栅格地图；
-7. **桥接验收截图**：`ros2 topic hz /uav1/setpoint_raw/local` 的频率输出；
-8. **踩坑对比图**：崩溃时的终端报错 vs 修复后的正常输出；
-9. **试飞视频**：GIF 或短视频，展示目标点发布 → 起飞 → 避障全过程。
