@@ -14,7 +14,7 @@ categories:
 ---
 
 
-> 本文基于一块 IP 为 `192.168.110.156` 的 RK3588 板卡上的实际工程整理而成，所有配置、命令与参数均来自板端真实文件。首次公开发布前，请按文末「配图清单」补上真机照片、RViz 截图与实测曲线，并对敏感信息做脱敏。
+> 本文基于 RK3588 板卡上的实际工程整理而成，所有配置、命令与参数均来自板端真实文件。
 
 ---
 
@@ -43,7 +43,7 @@ MID-360S ──> /livox/lidar + /livox/imu
          /cloud_registered ──> UDP 转发 ──> 地面站/图传显示
 ```
 
-一句话概括难点：**每一环单独都能跑，串起来全是坑**——DDS 环境变量、MAVROS 插件白名单、雷达 host_ip 冲突、OFFBOARD 心跳，任何一个没对齐，飞机都不动。
+
 
 ---
 
@@ -51,20 +51,18 @@ MID-360S ──> /livox/lidar + /livox/imu
 
 | 项目 | 型号 / 版本 |
 | --- | --- |
-| 主控 | RK3588（aarch64，4 核 Cortex-A76 + 4 核 Cortex-A55） |
+| 开发板 | RK3588（aarch64，4 核 Cortex-A76 + 4 核 Cortex-A55） |
 | 系统 | Ubuntu 22.04.5 LTS，内核 6.1.118 |
 | ROS | ROS2 Humble |
 | 激光雷达 | Livox MID-360S（非重复扫描，10Hz） |
 | 飞控 | PX4，通过 UDP 与板卡通信 |
 | 相机（可选） | RealSense D435i（仅 FAST-LIVO2 视觉方案需要） |
 | DDS | `rmw_cyclonedds_cpp`（**全链路统一，不可混用**） |
-| 板卡管理 IP | `192.168.110.156`（SSH 登录用） |
 
-> 说明：SSH 用户名 `ztl`。**任何公开博客都不要把板卡/飞控的登录密码写进去**，本文一律不记录口令。
 
 ---
 
-## 2. 网络规划：最先要理清、也最容易翻车的一步
+## 2. 网络规划：
 
 这套系统同时存在**四个网段**，物理上混在几个网口上，必须先画清楚再动手：
 
@@ -103,7 +101,7 @@ sudo nmcli connection down "$CN" && sleep 1
 sudo nmcli connection up   "$CN" && sleep 2
 ```
 
-FAST-LIVO2 的一键脚本更进一步，把「改 IP → 启动 → 退出时还原 IP」做成了闭环，并提供 `net` / `netrestore` 子命令用于只读检查和回滚。这个思路值得借鉴：**任何临时改动网络配置的操作，都要有配对的恢复手段**。
+FAST-LIVO2 的一键脚本更进一步，把「改 IP → 启动 → 退出时还原 IP」做成了闭环，并提供 `net` / `netrestore` 子命令用于只读检查和回滚。
 
 > 坑点提示：一键启动脚本顶部注释写「雷达 IP: 192.168.1.191」，而实际 `MID360s_config.json` 里的雷达 IP 是 `192.168.1.174`。注释与配置不一致时，**以驱动实际加载的 JSON 为准**，否则 ping 半天 ping 错对象。
 
@@ -122,7 +120,7 @@ FAST-LIVO2 的一键脚本更进一步，把「改 IP → 启动 → 退出时�
 | `~/ros2_ws` | `ego-planner-swarm`、`ego_to_mavros`、`external_odom_to_mavros` |
 | `~/d435i_ws` | RealSense 相机驱动 |
 
-`fastlivo2_isolated` 的设计很关键：它有自己的 `setup_env.sh`（设定 `ROS_DOMAIN_ID=42`，只 source 自己的两个 install），启动脚本明确声明「与旧脚本完全独立，不覆盖、不修改」。**做算法对比实验时，隔离环境能省掉大量"我到底 source 了哪个包"的玄学问题。**
+`fastlivo2_isolated` 的设计很关键：它有自己的 `setup_env.sh`（设定 `ROS_DOMAIN_ID=42`，只 source 自己的两个 install），启动脚本明确声明「与旧脚本完全独立」。
 
 ---
 
@@ -535,7 +533,7 @@ ODOM_TOPIC=/aft_mapped_to_init ./start_all_fastlivo2_screen.sh
 
 ## 15. 附录 C：配图清单（发布前补充）
 
-一篇技术博客的可读性，一半来自图。建议按下面清单补图：
+
 
 1. **系统总览图**：无人机 + 雷达 + RK3588 + 飞控的照片，标注各网口连线；
 2. **数据流架构图**：本文第 0 节的链路图，建议用 draw.io / Excalidraw 画成彩色框图；
@@ -546,22 +544,3 @@ ODOM_TOPIC=/aft_mapped_to_init ./start_all_fastlivo2_screen.sh
 7. **桥接验收截图**：`ros2 topic hz /uav1/setpoint_raw/local` 的频率输出；
 8. **踩坑对比图**：崩溃时的终端报错 vs 修复后的正常输出；
 9. **试飞视频**：GIF 或短视频，展示目标点发布 → 起飞 → 避障全过程。
-
----
-
-## 16. 发布与脱敏建议
-
-- **对外技术社区**（掘金 / CSDN / 知乎专栏）：适合讲"踩坑 + 方案"，价值最高的是第 7、12 节；
-- **个人博客**（Hexo / Hugo + GitHub Pages）：本文 Markdown 可直接用，图放 `source/images/`，架构图推荐 Mermaid 或 Excalidraw；
-- **团队内部**（语雀 / 飞书文档）：适合放完整参数和脚本，方便同事复现。
-
-发布前务必脱敏：
-
-1. 删除所有账号密码、SSH 密钥；
-2. 如果是真实项目，确认场景（如矿区/园区）照片和名称是否允许公开；
-3. 内网 IP 可按需要改成示例网段（如 `192.168.x.x`）；
-4. 飞控/固件版本、算法来源按项目合规要求处理。
-
----
-
-*本文记录的是一条"能跑通"的路径，不是唯一正确的路径。嵌入式系统的调试乐趣，恰恰在于把每一层的"不确定"逐个变成"确定"。*
