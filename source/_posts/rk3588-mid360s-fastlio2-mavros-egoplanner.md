@@ -159,6 +159,10 @@ ros2 topic hz /livox/imu       # 期望 100Hz（配置里 imu_publish_freq=100.0
 
 雷达刚上电要预热：FAST-LIVO2 脚本里专门留了 `PREHEAT=10` 秒倒计时，期间**必须保持机体静止**，否则 IMU 零偏没收敛，后面建图会飘。
 
+RViz 里 `/livox/lidar` 的原始点云（按距离着色，可见 MID-360S 非重复扫描的密集线束）：
+
+![MID-360S 雷达原始点云（RViz）](/images/lidar-rviz-pointcloud.jpg)
+
 ---
 
 ## 5. 第二步：FAST-LIO2 建图定位
@@ -207,6 +211,10 @@ pcd_save:
 ros2 topic hz /Odometry            # ~10Hz
 ros2 topic echo /Odometry --once   # 看 position 是否在动
 ```
+
+FAST-LIO2 输出的全局点云地图 `/cloud_registered`（CloudCompare 中查看，按高度着色，可见建图后的场景结构）：
+
+![FAST-LIO2 建图效果（CloudCompare）](/images/fastlio-mapping-result.jpg)
 
 ---
 
