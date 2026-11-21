@@ -541,3 +541,91 @@ ODOM_TOPIC=/aft_mapped_to_init ./start_all_fastlivo2_screen.sh
 ```
 
 日志实时写入 `~/fastlivo_realtime.log`，排查用 `tail -f` 即可。
+
+---
+
+## 15. 附录 C：用 Foxglove 远程看点云与规划轨迹
+
+前面附录 A 的点云 UDP 转发是"把点云发给地面站自定义程序"的路子。如果只是想在电脑上**直接看点云、看轨迹、顺便调参数**，更省事的办法是跑一个 Foxglove bridge，然后用浏览器连上去——不用装 ROS，也不用自己解析点云包。
+
+这套方案在 Windows 笔记本上实测可用，浏览器打开一个网页就能实时看到 `/cloud_registered` 全局地图和 EGO 的 B-spline 规划轨迹。
+
+### 15.1 为什么选 Foxglove bridge 而不是 rosbridge
+
+- `rosbridge_suite` 走 JSON，点云这种大数据量话题序列化开销大，卡；
+- `foxglove_bridge` 走 **WebSocket + 二进制（ROS2 原生 CDR）**，点云传输效率高得多；
+- 板卡上 `/opt/ros/humble/share` 里已自带 `foxglove_bridge`（实测版本 3.5.0），不用额外编译。
+
+### 15.2 板端启动 bridge
+
+用一个**独立的 screen 会话**，不要和主链路的 6 个会话混在一起——bridge 是调试工具，随时可能重启，不该影响飞行链路：
+
+```bash
+screen -dmS foxglove bash -c "
+source /opt/ros/humble/setup.bash
+source ~/ros2_ws/install/setup.bash
+source ~/mid360_ws/install/setup.bash
+source ~/mid360_fastlio_ws/install/setup.bash
+export RMW_IMPLEMENTATION=rmw_cyclonedds_cpp
+ros2 launch foxglove_bridge foxglove_bridge_launch.xml port:=8765
+exec bash
+"
+
+screen -ls | grep foxglove          # 确认会话在
+ss -ltnp | grep 8765                # 确认端口在监听
+```
+
+两个细节：
+
+1. **RMW 仍要设成 `rmw_cyclonedds_cpp`**，和主链路保持一致，否则 bridge 发现不了那些节点发布的话题；
+2. 启动后日志会打印 `Server listening on port 8765`，并把当前所有话题逐个 `Advertising new channel`。实测一次启动 advertise 了 126 个 channel，`/cloud_registered`、`/drone_0_planning/bspline`、`/Odometry`、`/grid_map/occupancy` 都在其中。
+
+### 15.3 电脑端连接
+
+浏览器打开 https://app.foxglove.dev ，新建连接，地址填：
+
+```
+ws://192.168.110.156:8765
+```
+
+连上后左侧是话题列表，中间加一个 **3D 面板**，把需要看的话题拖进去：
+
+| 想看什么 | 话题 | 面板里怎么配 |
+| --- | --- | --- |
+| 全局点云地图 | `/cloud_registered` | Point size 调小（实测 1.5 比较清楚），Color mode 选 **Intensity**，Palette 用 Turbo 或 Rainbow，能看出发散扫描的层次 |
+| 机体坐标系点云 | `/cloud_registered_body` | 同上，用于看最近一帧的扫描 |
+| 占据栅格地图 | `/grid_map/occupancy`、`/drone_0_grid/grid_map/occupancy_inflate` | 当点云显示，能看出 EGO 的膨胀边界 |
+| 规划轨迹 | `/drone_0_planning/bspline` | 作为曲线/标记显示，配合目标点看轨迹生成 |
+| 定位 | `/Odometry`、`/uav1/local_position/pose` | 看轨迹是否平滑 |
+
+实测效果：点云地图完整显示出来，一条 B-spline 规划轨迹从机体当前位置弯向目标点，右侧终端用 `ros2 topic pub --once /move_base_simple/goal` 发目标点即可触发重新规划。
+
+![Foxglove 远程查看点云与规划轨迹](/images/foxglove-remote-viz.jpg)
+
+### 15.4 发目标点触发规划
+
+在板卡终端发目标点（和第 8 节一样），Foxglove 里能立刻看到新轨迹：
+
+```bash
+ros2 topic pub --once /move_base_simple/goal geometry_msgs/msg/PoseStamped \
+  "{header: {frame_id: 'map'}, pose: {position: {x: 3.0, y: 2.0, z: 1.0}, orientation: {w: 1.0}}}"
+```
+
+这是调试 EGO 最舒服的方式：左边改参数、右边发目标、浏览器里实时看轨迹变化，不用反复开 RViz 截图。
+
+### 15.5 两个实测踩坑
+
+1. **点云历史深度被截断**：日志里出现
+   `Limiting history depth for topic '/cloud_registered' to 10 (was 20). You may want to increase the max_qos_depth parameter value.`
+   这是 bridge 默认 `max_qos_depth` 太小。点云本身是"当前状态"型数据，深度 10 其实够用；如果确实要缓存更多帧，给 launch 加参数 `max_qos_depth:=...`。
+
+2. **连不上先查两件事**：`ss -ltnp | grep 8765` 看端口是否在监听；`screen -r foxglove` 看 bridge 进程有没有崩。另外确认电脑和板卡在同一网段能互通——WebSocket 走的是 TCP 8765，和 MAVROS 的 UDP 14550、点云转发的 UDP 8888 是三件互不相关的事，别混。
+
+### 15.6 和附录 A 的选择建议
+
+| 需求 | 用哪个 |
+| --- | --- |
+| 快速看点云/轨迹、调参数、跨设备 | **Foxglove bridge**（本章）——零客户端开发，浏览器直连 |
+| 要把点云接进自己的地面站程序、自定义协议 | **UDP 转发**（附录 A）——可控字段和频率，适合定制 |
+
+两者可以同时跑，互不冲突。
